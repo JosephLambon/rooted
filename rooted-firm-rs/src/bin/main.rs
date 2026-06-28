@@ -8,17 +8,16 @@
 #![deny(clippy::large_stack_frames)]
 
 use esp_hal::clock::CpuClock;
-use esp_hal::main;
-use esp_hal::analog::adc;
-use esp_hal::gpio::{Input, InputConfig};
-use esp_hal::time::{Duration, Instant};
 use esp_hal::delay::Delay;
+use esp_hal::main;
+use esp_hal::time::{Duration, Instant};
+use esp_hal::analog::adc::{Adc, AdcConfig, Attenuation};
 
 use embedded_hal::delay::DelayNs;
 
 use esp_println::logger::init_logger;
 
-use log::{info};
+use log::{error, info};
 
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
@@ -29,48 +28,51 @@ fn panic(_: &core::panic::PanicInfo) -> ! {
 // For more information see: <https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/app_image_format.html#application-description>
 esp_bootloader_esp_idf::esp_app_desc!();
 
-
 #[allow(
     clippy::large_stack_frames,
     reason = "it's not unusual to allocate larger buffers etc. in main"
 )]
-
-
 #[main]
 fn main() -> ! {
     // generator version: 1.3.0
     // generator parameters: --chip esp32
 
+    let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
+    // Setup CPU clock & watchdog timer
+    let peripherals = esp_hal::init(config);
+    info!("peripherals loaded.");
+
     // Initialise esp-println / log logger
     init_logger(log::LevelFilter::Info);
 
-    let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
-    let peripherals = esp_hal::init(config);
+    let timer = Instant::now();
+    info!("500ms delay start...\n");
+    while timer.elapsed() < Duration::from_millis(500) {}
+    info!("===PROGRAM START===");
+
 
     // ESP32 pin GPIO36 connects to AOUT pin of moisture sensor
-    let mut adc1
+    let mut adc1_config = AdcConfig::new();
+    let mut pin36 = adc1_config.enable_pin(peripherals.GPIO32, Attenuation::_11dB);
+    let mut adc1 = Adc::new(peripherals.ADC1, adc1_config);
 
-    let pin36 = Input::new(peripherals.GPIO36, InputConfig::default());
-
+    info!("adc1 configured.");
+    let mut delay = Delay::new();
+    info!("GPIO32 moisture readings:");
     loop {
-        let timer = Instant::now();
-        info!("===PROGRAM START===");
-        info!("500ms delay start...");
-        while timer.elapsed() < Duration::from_millis(500) { }   
-        
-        let mut delay = Delay::new();
-        
-        loop {
-            let analog = peripherals.SENS.split();
+        match nb::block!(adc1.read_oneshot(&mut pin36)) {
+            Ok(moisture_level) => {
+                info!("level: {:?}", moisture_level);
+            }
+            Err(e) => {
+                error!("{:?}", e);
+                error!("Error reading moisture level");
+            }
+        };
 
-            let moisture_level = pin36.level();
-            info!("level: {:?}", moisture_level);
-
-            // PAUSE FOR 5s
-            delay.delay_ms(5000 as u32);
-        }        
+        // PAUSE FOR 5s
+        delay.delay_ms(2000_u32);
     }
-    // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/esp-hal-v1.1.0/examples
 }
 
 #[unsafe(no_mangle)]
