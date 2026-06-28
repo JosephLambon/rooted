@@ -7,11 +7,17 @@
 )]
 #![deny(clippy::large_stack_frames)]
 
-use esp_hal::clock::CpuClock;
-use esp_hal::delay::Delay;
-use esp_hal::main;
-use esp_hal::time::{Duration, Instant};
-use esp_hal::analog::adc::{Adc, AdcConfig, Attenuation};
+use esp_hal::{
+    main,
+    delay::Delay,
+    clock::CpuClock,
+    time::{Duration, Instant},
+    timer::{timg::TimerGroup},
+    analog::adc::{Adc, AdcConfig, Attenuation}, 
+    interrupt::software::SoftwareInterruptControl,
+    ram,
+};
+
 
 use embedded_hal::delay::DelayNs;
 
@@ -36,19 +42,39 @@ esp_bootloader_esp_idf::esp_app_desc!();
 fn main() -> ! {
     // generator version: 1.3.0
     // generator parameters: --chip esp32
-
-    let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
+    
     // Setup CPU clock & watchdog timer
+    let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
+    info!("Loading peripherals...");
     let peripherals = esp_hal::init(config);
-    info!("peripherals loaded.");
-
+    
     // Initialise esp-println / log logger
     init_logger(log::LevelFilter::Info);
+    
+    // Configure Real-Time Operating System (RTOS)
+    let timg0 = TimerGroup::new(peripherals.TIMG0);
+    let software_interrupt = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
+    // Start the task scheduler
+    info!("Starting task scheduler...");
+    esp_rtos::start(timg0.timer0, software_interrupt.software_interrupt0);
 
+    // Initialise wifi radio
+    info!("Initialising wifi controller...");
+    if let Ok(controller) = esp_radio::wifi::WifiController::new(
+        peripherals.WIFI,
+        Default::default(),
+    ) {}
+
+
+    // Start timer
+    info!("Starting timer...");
     let timer = Instant::now();
     info!("500ms delay start...\n");
     while timer.elapsed() < Duration::from_millis(500) {}
     info!("===PROGRAM START===");
+
+    esp_alloc::heap_allocator!(#[ram(reclaimed)] size: 64 * 1024);
+    esp_alloc::heap_allocator!(size: 32 * 1024);
 
 
     // ESP32 pin GPIO36 connects to AOUT pin of moisture sensor
