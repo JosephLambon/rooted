@@ -16,16 +16,15 @@ embedded-hal = "1.0.0"
 log = "0.4.33"
 esp-println = { version = "0.17.0", features = ["esp32", "log-04", "timestamp"] }
 nb = "1.1.0"
-esp-alloc = "0.10.0"
-esp-rtos = "0.3.0"
-esp-radio = "0.18.0"
-
-[dependencies.esp-radio]
-features = ["esp32", "wifi", "esp-now", "esp-alloc"]
-[dependencies.esp-rtos]
-features = ["esp32", "esp-radio", "esp-alloc"]
-[dependencies.esp-alloc]
-features = ["esp32"]
+esp-alloc = {version = "0.10.0", features = ["esp32"]}
+esp-rtos = { version = "0.3.0", features = ["esp32", "esp-radio", "esp-alloc", "embassy"]}
+esp-radio = { version = "0.18.0", features = ["esp32", "wifi", "esp-now", "esp-alloc", "unstable"] }
+reqwless = "0.14.0"
+embassy-net = { version = "0.9.1", features = ["tcp", "udp", "dns", "dhcpv4", "medium-ethernet", "proto-ipv4"] }
+embassy-executor = "0.10"
+embassy-time = "0.5.1"
+static_cell = "2.1.1"
+heapless = "0.9.3"
 
 
 # For fine tuning these settings, please refer to https://doc.rust-lang.org/cargo/reference/profiles.html
